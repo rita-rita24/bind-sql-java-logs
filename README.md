@@ -1,78 +1,12 @@
 # BindSQL Java Logs
 
+## 概要
 Eclipse などのデバッグ表示や MyBatis / Hibernate / Spring JDBC のSQLログで分離される「SQL」と「バインド変数」を、SQL クライアントでそのまま実行できる SQL に変換するローカルツールです。
+必要なアイコンフォントをHTML内に埋め込み、外部CDNや外部APIへ通信せずに単一HTMLだけで動作します。
 
 ## 使い方
-1. 左側の1つの入力欄に、デバッグのウォッチ内容（SQL + バインド変数）をまとめて貼り付けます。
-2. ツールがバインド行を自動判定して SQL にマージします。
-3. 右側にリアルタイムで実行可能 SQL が表示されます。
-4. `コピー` ボタンで結果をクリップボードへコピーできます。
-
-## 入力形式
-- SQL 本文とバインド変数を同じ入力欄に混在で貼り付け可能
-- 名前付きバインド: `:id = 4529`
-- 名前付きバインド（クォート文字列）: `:status = "ACTIVE"`
-- 位置バインド（`?` 用）: `[1] = 100` または `1 = 100`
-- 1行ログ形式: `sql=[SELECT ... WHERE id = ?] parameters=[1=4529]`
-- Javaログ形式: MyBatis の `Preparing` / `Parameters`、Hibernate の `Hibernate:` / `binding parameter`、Spring JDBC の `Executing prepared SQL statement` / `Setting SQL statement parameter value`
-
-## 変換例
-入力:
-```text
-sql=[select u . id,u.name,case when u.status = ? then '有効' else '無効' end as status_name from users u inner join orders o on u.id=o.user_id where u.id=? and (o.status=? or o.status=?)] parameters=[1=1,2=100,3="OPEN",4="HOLD"]
-```
-
-出力:
-```sql
-SELECT
-  u.id
-  , u.name
-  , CASE
-    WHEN u.status = 1
-    THEN '有効'
-    ELSE '無効'
-    END AS status_name
-FROM
-  users u
-  INNER JOIN orders o
-    ON u.id = o.user_id
-WHERE
-  u.id = 100
-  AND (o.status = 'OPEN'
-    OR o.status = 'HOLD')
-```
-
-## 変換仕様
-- SQL とバインド変数をリアルタイムでマージ
-- MyBatis / Hibernate / Spring JDBC の代表的なSQLログを、既存の位置バインド形式へ自動正規化
-- A5:SQL Mk-2 風の整形ルールで、句ごとに改行して見やすく配置
-- `SELECT` / `GROUP BY` / `ORDER BY` / `SET` のカンマ区切り項目を改行し、2項目目以降は前置カンマで表示
-- `JOIN` / `ON` / `AND` / `OR` は階層に応じてインデント付きで改行
-- `MERGE INTO` / `USING` / `WHEN MATCHED THEN` / `WHEN NOT MATCHED THEN` と、MERGE 内の `UPDATE SET` / `INSERT` / `DELETE` / `DO NOTHING` を句単位で改行
-- `CASE` / `WHEN` / `THEN` / `ELSE` / `END` を段付きで整形
-- 括弧の深さに応じて追加インデント
-- 演算子（`=` / `<>` / `<=` / `+` / `*` / `/` / `||` など）とドット記法（`u . id` -> `u.id`）の空白を整形
-- バインド値がダブルクォートの場合はシングルクォートへ自動変換
-  - 例: `"ACTIVE"` -> `'ACTIVE'`
-- スマートクォート付きの文字列値（`“...”` / `‘...’`）は通常のSQL文字列へ正規化
-  - 例: `‘ACTIVE’` -> `'ACTIVE'`
-- `NULL` / `TRUE` / `FALSE` は SQL リテラルとして保持
-- 1行ログ形式の `parameters=[...]` で、スマートクォート（`“...”` / `‘...’`）内のカンマを含む値を正しく1項目として扱う
-- 位置バインドは `[1]` / `[2]` の番号に対応する `?` を置換し、欠番を出現順で詰めない
-- 名前付きバインドと位置バインドの未置換・余剰がある場合は完了扱いにせず、結果欄で通知
-- PostgreSQL のドルクォート文字列（`$$...$$` / `$tag$...$tag$`）内部は、キーワード大文字化や改行整形の対象から除外
-- 入力欄（`textarea` 重ね合わせ方式）と出力欄の両方で、SQLキーワード・文字列・数値・コメントを色分け表示
-- SQLキーワード辞書を Oracle / PostgreSQL 向けに拡張し、キーワード大文字化とハイライト対象を強化
-- コピーボタンは見た目のハイライトHTMLを含めず、整形済みのプレーンSQL文字列のみをコピー
-- エラー通知は画面上部中央のトーストで表示（コピー成功はトースト表示しない）
-- コピー成功時はコピーボタンの文言を一時的に `コピーしました` へ変更し、約1.5秒後に戻す
-- 出力パネルにも `出力欄` ラベルを表示し、入力側との縦構造を揃えて表示ずれを抑制
-- 画面右上のトグルでライト/ダークモードを手動切り替え可能（選択したテーマはブラウザに保存）
-- HTMLタイトル、画面左上のツール名、READMEの表記を `BindSQL Java Logs` に統一
-
-## 補足
-- ツールは単一 HTML で動作します。
-- HTMLファイル名は `BindSQLJavaLogs.html` です。
-- 画面は入力欄・結果欄・コピー操作に絞ったシンプル表示です。
-- 入力テキストエリアは初期表示で縦いっぱいに広がるレイアウトです。
-- ボタンアイコンは CDN から Material Symbols（Google Fonts）を利用し、ファビコンは同じデータベースモチーフのオレンジSVGです。
+1. `BindSQLJavaLogs.html` をブラウザで開きます。
+2. 左側の入力欄に、SQL とバインド変数をまとめて貼り付けます。
+3. ツールがバインド行を自動判定して SQL にマージします。
+4. 右側にリアルタイムで実行可能 SQL が表示されます。
+5. `コピー` ボタンで結果をクリップボードへコピーできます。
