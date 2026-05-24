@@ -30,12 +30,14 @@
       p,
       pre,
       textarea,
-      button {
+      button,
+      select {
         margin: 0;
       }
 
       button,
-      textarea {
+      textarea,
+      select {
         font: inherit;
         color: inherit;
       }
@@ -91,10 +93,13 @@
 
       html,
       body {
-        min-height: 100%;
+        height: 100%;
       }
 
       body {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        overflow: hidden;
         background:
           radial-gradient(circle at 10% 10%, oklch(0.86 0.07 250 / 22%), transparent 40%),
           radial-gradient(circle at 90% 90%, oklch(0.86 0.06 180 / 20%), transparent 42%),
@@ -107,17 +112,27 @@
 
     @layer component {
       .app {
-        min-height: 100vh;
+        min-height: 0;
         padding-inline: clamp(0.9rem, 1.7vw, 1.4rem);
         padding-bottom: clamp(0.9rem, 1.7vw, 1.4rem);
-        padding-top: calc(clamp(0.9rem, 1.7vw, 1.4rem) + 2.9rem);
+        padding-top: clamp(0.9rem, 1.7vw, 1.4rem);
         display: grid;
         grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr);
         gap: clamp(0.9rem, 1.4vw, 1.2rem);
+        overflow: hidden;
 
         @media (max-width: 980px) {
           grid-template-columns: 1fr;
         }
+      }
+
+      .app-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: clamp(0.7rem, 1.8vw, 1rem) clamp(0.7rem, 1.8vw, 1rem) 0;
       }
 
       .panel {
@@ -128,7 +143,7 @@
         border-radius: 16px;
         overflow: hidden;
         box-shadow: var(--shadow);
-        min-height: min(82vh, 860px);
+        min-height: 0;
 
         &.panel--output {
           background: linear-gradient(165deg, var(--surface), var(--surface-muted));
@@ -140,6 +155,7 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
+        flex-wrap: wrap;
         gap: 0.6rem;
         border-bottom: 1px solid var(--border);
         background: oklch(from var(--surface-muted) l c h / 65%);
@@ -161,6 +177,14 @@
           font-size: 0.95rem;
           font-weight: 700;
         }
+      }
+
+      .panel__actions {
+        display: inline-flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 0.5rem;
+        margin-left: auto;
       }
 
       .panel__body {
@@ -343,18 +367,55 @@
         }
       }
 
+      .db-select {
+        position: relative;
+        min-height: 2.15rem;
+        display: inline-block;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--surface);
+        color: var(--text);
+
+        &::after {
+          content: "";
+          position: absolute;
+          top: 50%;
+          right: 0.75rem;
+          width: 0.45rem;
+          height: 0.45rem;
+          border-right: 2px solid var(--text-muted);
+          border-bottom: 2px solid var(--text-muted);
+          transform: translateY(-70%) rotate(45deg);
+          pointer-events: none;
+        }
+      }
+
+      .db-select__control {
+        min-width: 0;
+        width: 7.4rem;
+        min-height: 2.15rem;
+        border: 0;
+        border-radius: inherit;
+        appearance: none;
+        -webkit-appearance: none;
+        padding: 0 1.35rem 0 0.7rem;
+        background: transparent;
+        color: inherit;
+        font-size: 0.8rem;
+        font-weight: 700;
+        cursor: pointer;
+
+        &:focus-visible {
+          outline: 2px solid var(--focus-ring);
+          outline-offset: 3px;
+        }
+      }
+
       .mode-toggle {
-        position: fixed;
-        top: clamp(0.7rem, 1.8vw, 1rem);
-        right: clamp(0.7rem, 1.8vw, 1rem);
-        z-index: 30;
+        flex: 0 0 auto;
       }
 
       .app-title {
-        position: fixed;
-        top: clamp(0.7rem, 1.8vw, 1rem);
-        left: clamp(0.7rem, 1.8vw, 1rem);
-        z-index: 30;
         display: inline-flex;
         align-items: center;
         min-height: 2.2em;
@@ -364,7 +425,7 @@
         background: oklch(from var(--surface) l c h / 88%);
         color: var(--text);
         font-size: 0.82rem;
-        font-weight: 800;
+        font-weight: 600;
         letter-spacing: 0.02em;
         box-shadow: 0 0 10px oklch(0 0 0 / 8%);
         backdrop-filter: blur(2px);
@@ -551,24 +612,26 @@
   </style>
 </head>
 <body>
-  <p class="app-title">BindSQL Java Logs</p>
-  <div class="mode-toggle">
-    <label class="switch" for="lightModeToggle">
-      <input checked id="lightModeToggle" type="checkbox" data-role="mode-toggle" aria-label="ライト/ダークモード切り替え" />
-      <span class="slider">
-        <div class="star star_1"></div>
-        <div class="star star_2"></div>
-        <div class="star star_3"></div>
-        <svg viewBox="0 0 16 16" class="cloud_1 cloud" aria-hidden="true">
-          <path
-            transform="matrix(.77976 0 0 .78395-299.99-418.63)"
-            fill="#fff"
-            d="m391.84 540.91c-.421-.329-.949-.524-1.523-.524-1.351 0-2.451 1.084-2.485 2.435-1.395.526-2.388 1.88-2.388 3.466 0 1.874 1.385 3.423 3.182 3.667v.034h12.73v-.006c1.775-.104 3.182-1.584 3.182-3.395 0-1.747-1.309-3.186-2.994-3.379.007-.106.011-.214.011-.322 0-2.707-2.271-4.901-5.072-4.901-2.073 0-3.856 1.202-4.643 2.925"
-          ></path>
-        </svg>
-      </span>
-    </label>
-  </div>
+  <header class="app-bar">
+    <p class="app-title">BindSQL Java Logs</p>
+    <div class="mode-toggle">
+      <label class="switch" for="lightModeToggle">
+        <input checked id="lightModeToggle" type="checkbox" data-role="mode-toggle" aria-label="ライト/ダークモード切り替え" />
+        <span class="slider">
+          <div class="star star_1"></div>
+          <div class="star star_2"></div>
+          <div class="star star_3"></div>
+          <svg viewBox="0 0 16 16" class="cloud_1 cloud" aria-hidden="true">
+            <path
+              transform="matrix(.77976 0 0 .78395-299.99-418.63)"
+              fill="#fff"
+              d="m391.84 540.91c-.421-.329-.949-.524-1.523-.524-1.351 0-2.451 1.084-2.485 2.435-1.395.526-2.388 1.88-2.388 3.466 0 1.874 1.385 3.423 3.182 3.667v.034h12.73v-.006c1.775-.104 3.182-1.584 3.182-3.395 0-1.747-1.309-3.186-2.994-3.379.007-.106.011-.214.011-.322 0-2.707-2.271-4.901-5.072-4.901-2.073 0-3.856 1.202-4.643 2.925"
+            ></path>
+          </svg>
+        </span>
+      </label>
+    </div>
+  </header>
   <main class="app">
     <section class="panel panel--input" aria-label="入力エリア">
       <header class="panel__header">
@@ -603,18 +666,26 @@
       <header class="panel__header">
         <div class="panel__title-wrap">
           <p class="panel__eyebrow">Output</p>
-          <h2 class="panel__title">実行可能 SQL</h2>
+          <h2 class="panel__title"><span data-role="database-label">PostgreSQL</span>向け SQL</h2>
         </div>
-        <button class="button button--primary" type="button" data-action="copy">
-          <span class="button__icon" aria-hidden="true">content_copy</span>
-          <span data-role="copy-label">コピー</span>
-        </button>
+        <div class="panel__actions">
+          <label class="db-select" for="database-dialect">
+            <span class="sr-only">DB種類</span>
+            <select id="database-dialect" class="db-select__control" data-role="database-dialect" aria-label="DB種類">
+              <option value="postgresql" selected>PostgreSQL</option>
+            </select>
+          </label>
+          <button class="button button--primary" type="button" data-action="copy">
+            <span class="button__icon" aria-hidden="true">content_copy</span>
+            <span data-role="copy-label">コピー</span>
+          </button>
+        </div>
       </header>
 
       <div class="panel__body">
         <div class="field">
           <p class="form-label">出力欄</p>
-          <pre class="output" data-role="output">-- ここに変換後SQLが表示されます --</pre>
+          <pre class="output" data-role="output">-- ここにPostgreSQL向けSQLが表示されます --</pre>
         </div>
       </div>
     </section>
@@ -648,6 +719,7 @@
         "ORDER BY",
         "LIMIT",
         "OFFSET",
+        "RETURNING",
         "VALUES",
         "SET",
         "INNER JOIN",
@@ -659,7 +731,10 @@
       ];
       const MERGE_CLAUSE_KEYWORDS = [
         "MERGE INTO",
+        "MERGE",
         "USING",
+        "WHEN NOT MATCHED BY SOURCE",
+        "WHEN NOT MATCHED BY TARGET",
         "WHEN NOT MATCHED",
         "WHEN MATCHED",
         "INSERT",
@@ -988,7 +1063,6 @@ WITH
         `\\b(?:${SQL_KEYWORD_DICTIONARY.map((_keyword) => _buildKeywordPatternSource(_keyword)).join("|")})\\b`,
         "gi"
       );
-      const PLACEHOLDER_TEXT = "-- ここに変換後SQLが表示されます --";
       const NAMED_BIND_PATTERN = /^:?(?<name>[A-Za-z_][A-Za-z0-9_$]*)\s*(?:=>|=|:)\s*(?<value>.+)$/;
       const NAMED_PLACEHOLDER_PATTERN = /(^|[^:]):(?<name>[A-Za-z_][A-Za-z0-9_$]*)\b/g;
       const POSITIONAL_BIND_PATTERN = /^(?:\[(?<indexA>\d+)\]|(?<indexB>\d+))\s*(?:=>|=|:)\s*(?<value>.+)$/;
@@ -997,8 +1071,8 @@ WITH
       const BIND_HEADER_PATTERN = /^(?:bind(?:\s+variables?)?|params?|parameters?)\s*:?\s*$/i;
       const SQL_PREFIX_PATTERN = /^\s*sql\s*[:=]\s*(?<sql>.+)$/i;
       const HIBERNATE_BIND_PATTERNS = [
-        /\bbinding parameter\s+\[(?<index>\d+)\]\s+as\s+\[[^\]]+\]\s*-\s*\[(?<value>[\s\S]*?)\]\s*$/i,
-        /\bbinding parameter\s+\((?<index>\d+)\s*:[^)]+\)\s*<-\s*\[(?<value>[\s\S]*?)\]\s*$/i
+        /\bbinding parameter\s+\[(?<index>\d+)\]\s+as\s+\[(?<type>[^\]]+)\]\s*-\s*\[(?<value>[\s\S]*?)\]\s*$/i,
+        /\bbinding parameter\s+\((?<index>\d+)\s*:\s*(?<type>[^)]+)\)\s*<-\s*\[(?<value>[\s\S]*?)\]\s*$/i
       ];
       const PARAMETER_QUOTE_PAIRS = Object.freeze({
         "'": "'",
@@ -1049,6 +1123,9 @@ WITH
       const THEME_STORAGE_KEY = "bindsql-theme-preference";
       const THEME_LIGHT = "light";
       const THEME_DARK = "dark";
+      const DATABASE_DIALECT_LABELS = Object.freeze({
+        postgresql: "PostgreSQL"
+      });
 
       const MESSAGES = Object.freeze({
         unresolvedNamed: (_list, _count) => `未置換の名前付きバインド (${_list}) が ${_count} 件あります。`,
@@ -1067,6 +1144,8 @@ WITH
       const $copyLabel = qs('[data-role="copy-label"]');
       const $copyButton = qs('[data-action="copy"]');
       const $lightModeToggle = qs('[data-role="mode-toggle"]');
+      const $databaseDialect = qs('[data-role="database-dialect"]');
+      const $databaseLabel = qs('[data-role="database-label"]');
 
       const _state = {
         _lastSql: "",
@@ -1093,13 +1172,18 @@ WITH
         /^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(_value) ||
         _isQuotedValue(_value);
 
-      const _quoteParameterValue = (_value) => {
+      const _toPostgresqlStringLiteral = (_value) => `'${_value.replace(/'/g, "''")}'`;
+
+      const _quoteParameterValue = (_value, _forceStringLiteral = false) => {
         const _trimmed = _value.trim();
-        if (!_trimmed || _isSqlLiteralValue(_trimmed)) {
+        if (_forceStringLiteral && _isQuotedValue(_trimmed)) {
+          return _trimmed;
+        }
+        if (!_trimmed || (!_forceStringLiteral && _isSqlLiteralValue(_trimmed))) {
           return _trimmed;
         }
 
-        return `"${_trimmed.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+        return _toPostgresqlStringLiteral(_trimmed);
       };
 
       const _splitParameterEntries = (_parametersText) => {
@@ -1162,14 +1246,23 @@ WITH
         return `${_match.groups.key} = ${_quoteParameterValue(_match.groups.value)}`;
       };
 
-      const _stripLoggedParameterType = (_value) => {
+      const _parseLoggedParameterValue = (_value) => {
         const _match = _value.trim().match(/^(?<value>[\s\S]*?)\s*\((?<type>[A-Za-z0-9_.$\s-]+)\)\s*$/);
         if (!_match?.groups) {
-          return _value.trim();
+          return {
+            _value: _value.trim(),
+            _type: ""
+          };
         }
 
-        return _match.groups.value.trim();
+        return {
+          _value: _match.groups.value.trim(),
+          _type: _match.groups.type.trim()
+        };
       };
+
+      const _isPostgresqlStringLikeParameterType = (_type) =>
+        /char|string|text|clob|date|time|timestamp|instant|uuid|json|xml/i.test(_type);
 
       const _isCompleteLogParameterEntry = (_entry) => {
         const _trimmed = _entry.trim();
@@ -1246,8 +1339,13 @@ WITH
         return _entries;
       };
 
-      const _formatLogPositionalBindLine = (_index, _value, _stripType = false) =>
-        `${_index} = ${_quoteParameterValue(_stripType ? _stripLoggedParameterType(_value) : _value.trim())}`;
+      const _formatLogPositionalBindLine = (_index, _value, _stripType = false, _type = "") => {
+        const _parameter = _stripType
+          ? _parseLoggedParameterValue(_value)
+          : { _value: _value.trim(), _type };
+        const _forceStringLiteral = _isPostgresqlStringLikeParameterType(_parameter._type) && !/^null$/i.test(_parameter._value);
+        return `${_index} = ${_quoteParameterValue(_parameter._value, _forceStringLiteral)}`;
+      };
 
       const _readDollarQuotedSegment = (_sql, _startIndex) => {
         if (_sql[_startIndex] !== "$") {
@@ -1597,9 +1695,22 @@ WITH
         _syncInputHighlightScroll();
       };
 
+      const _getSelectedDatabaseLabel = () => {
+        const _dialect = $databaseDialect?.value ?? "postgresql";
+        return DATABASE_DIALECT_LABELS[_dialect] ?? $databaseDialect?.selectedOptions?.[0]?.textContent?.trim() ?? "PostgreSQL";
+      };
+
+      const _buildPlaceholderText = () => `-- ここに${_getSelectedDatabaseLabel()}向けSQLが表示されます --`;
+
+      const _syncDatabaseLabel = () => {
+        if ($databaseLabel) {
+          $databaseLabel.textContent = _getSelectedDatabaseLabel();
+        }
+      };
+
       const _renderOutputHighlight = (_sql) => {
         if (!_sql) {
-          $output.textContent = PLACEHOLDER_TEXT;
+          $output.textContent = _buildPlaceholderText();
           return;
         }
 
@@ -1698,7 +1809,11 @@ WITH
           return _value.toUpperCase();
         }
 
-        return _value;
+        if (/^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(_value) || (_value.startsWith("'") && _value.endsWith("'"))) {
+          return _value;
+        }
+
+        return _toPostgresqlStringLiteral(_value);
       };
 
       const _isBindDefinitionLine = (_trimmed, _allowBareName = false) => {
@@ -1776,7 +1891,7 @@ WITH
         for (const _pattern of HIBERNATE_BIND_PATTERNS) {
           const _match = _line.match(_pattern);
           if (_match?.groups?.index && _match.groups.value !== undefined) {
-            return _formatLogPositionalBindLine(Number(_match.groups.index), _match.groups.value);
+            return _formatLogPositionalBindLine(Number(_match.groups.index), _match.groups.value, false, _match.groups.type ?? "");
           }
         }
 
@@ -1940,6 +2055,100 @@ WITH
         return { _nextSql, _count };
       };
 
+      const POSTGRESQL_QUESTION_OPERATOR_PREVIOUS_KEYWORDS = new Set([
+        "AND",
+        "BY",
+        "CASE",
+        "ELSE",
+        "FROM",
+        "HAVING",
+        "IN",
+        "IS",
+        "JOIN",
+        "NOT",
+        "NULL",
+        "ON",
+        "OR",
+        "RETURNING",
+        "SELECT",
+        "SET",
+        "THEN",
+        "TRUE",
+        "FALSE",
+        "USING",
+        "VALUES",
+        "WHEN",
+        "WHERE"
+      ]);
+
+      const _findPreviousNonSpaceIndex = (_sql, _index) => {
+        let _previousIndex = _index - 1;
+        while (_previousIndex >= 0 && /\s/.test(_sql[_previousIndex] ?? "")) {
+          _previousIndex -= 1;
+        }
+        return _previousIndex;
+      };
+
+      const _findNextNonSpaceIndex = (_sql, _index) => {
+        let _nextIndex = _index + 1;
+        while (_nextIndex < _sql.length && /\s/.test(_sql[_nextIndex] ?? "")) {
+          _nextIndex += 1;
+        }
+        return _nextIndex;
+      };
+
+      const _readPreviousWord = (_sql, _index) => {
+        let _wordEndIndex = _findPreviousNonSpaceIndex(_sql, _index);
+        if (!/[A-Za-z0-9_$]/.test(_sql[_wordEndIndex] ?? "")) {
+          return "";
+        }
+
+        let _wordStartIndex = _wordEndIndex;
+        while (_wordStartIndex > 0 && /[A-Za-z0-9_$]/.test(_sql[_wordStartIndex - 1] ?? "")) {
+          _wordStartIndex -= 1;
+        }
+        return _sql.slice(_wordStartIndex, _wordEndIndex + 1);
+      };
+
+      const _hasExpressionBeforeQuestionOperator = (_sql, _index) => {
+        const _previousIndex = _findPreviousNonSpaceIndex(_sql, _index);
+        const _previousCharacter = _sql[_previousIndex] ?? "";
+        if (!/[A-Za-z0-9_$)\]"@]/.test(_previousCharacter)) {
+          return false;
+        }
+
+        const _previousWord = _readPreviousWord(_sql, _index).toUpperCase();
+        return !_previousWord || !POSTGRESQL_QUESTION_OPERATOR_PREVIOUS_KEYWORDS.has(_previousWord);
+      };
+
+      const _isPostgresqlQuestionMarkOperator = (_sql, _index) => {
+        const _immediateNextCharacter = _sql[_index + 1] ?? "";
+        if (_immediateNextCharacter === "|" || _immediateNextCharacter === "&") {
+          return true;
+        }
+
+        if (!_hasExpressionBeforeQuestionOperator(_sql, _index)) {
+          return false;
+        }
+
+        const _nextIndex = _findNextNonSpaceIndex(_sql, _index);
+        const _nextCharacter = _sql[_nextIndex] ?? "";
+        return /[A-Za-z0-9_$'"(@?]/.test(_nextCharacter);
+      };
+
+      const _replacePositionalBindPlaceholders = (_sql, _replace) => {
+        let _result = "";
+        for (let _index = 0; _index < _sql.length; _index += 1) {
+          if (_sql[_index] === "?" && !_isPostgresqlQuestionMarkOperator(_sql, _index)) {
+            _result += _replace();
+            continue;
+          }
+
+          _result += _sql[_index];
+        }
+        return _result;
+      };
+
       const _mergeSqlAndBinds = (_sql, _binds) => {
         const _protectedStore = _maskSqlProtectedSegments(_sql);
         let _workingSql = _protectedStore._masked;
@@ -1958,9 +2167,11 @@ WITH
 
         let _placeholderIndex = 0;
         const _usedPositionalIndexes = new Set();
-        _workingSql = _workingSql.replace(/\?/g, () => {
+        let _missingPositionalCount = 0;
+        _workingSql = _replacePositionalBindPlaceholders(_workingSql, () => {
           _placeholderIndex += 1;
           if (!_binds._positional.has(_placeholderIndex)) {
+            _missingPositionalCount += 1;
             return "?";
           }
           const _value = _binds._positional.get(_placeholderIndex);
@@ -1970,7 +2181,6 @@ WITH
 
         const _missingNamedNames = [..._requiredNamedCounts.keys()].filter((_name) => !_binds._named.has(_name));
         const _extraNamedNames = [..._binds._named.keys()].filter((_name) => !_requiredNamedCounts.has(_name));
-        const _remainingPlaceholderCount = (_workingSql.match(/\?/g) ?? []).length;
         const _extraPositionalIndexes = [..._binds._positional.keys()]
           .filter((_index) => !_usedPositionalIndexes.has(_index))
           .sort((_left, _right) => _left - _right);
@@ -1982,8 +2192,8 @@ WITH
           _issues.push(MESSAGES.extraNamed(_formatNamedBindList(_extraNamedNames), _extraNamedNames.length));
         }
 
-        if (_remainingPlaceholderCount > 0) {
-          _issues.push(MESSAGES.unresolvedPositional(_remainingPlaceholderCount));
+        if (_missingPositionalCount > 0) {
+          _issues.push(MESSAGES.unresolvedPositional(_missingPositionalCount));
         }
         if (_extraPositionalIndexes.length > 0) {
           _issues.push(MESSAGES.extraPositional(_formatPositionalBindList(_extraPositionalIndexes), _extraPositionalIndexes.length));
@@ -2037,7 +2247,58 @@ WITH
 
       const _breakBeforeKeyword = (_sql, _keyword, _indent = "") => {
         const _pattern = new RegExp(`\\s+${_keyword.replace(/\s+/g, "\\s+")}\\b`, "g");
-        return _sql.replace(_pattern, `\n${_indent}${_keyword}`);
+        return _sql.replace(_pattern, (_match, _offset, _source) => {
+          const _keywordOffset = _offset + (_match.match(/\S/)?.index ?? 0);
+          if (_shouldSkipKeywordBreak(_source, _keywordOffset, _keyword)) {
+            return _match;
+          }
+
+          return `\n${_indent}${_keyword}`;
+        });
+      };
+
+      const _getOpenParenContexts = (_source, _offset) => {
+        const _contexts = [];
+
+        for (let _index = 0; _index < _offset; _index += 1) {
+          const _character = _source[_index];
+          if (_character === "(") {
+            const _beforeParen = _source.slice(0, _index).trimEnd();
+            const _prefix = _beforeParen.match(/\b[A-Z_][A-Z0-9_$]*(?:\s+[A-Z_][A-Z0-9_$]*){0,2}$/i)?.[0] ?? "";
+            _contexts.push(_prefix.toUpperCase().replace(/\s+/g, " "));
+            continue;
+          }
+
+          if (_character === ")") {
+            _contexts.pop();
+          }
+        }
+
+        return _contexts;
+      };
+
+      const _isInsideExpressionParentheses = (_source, _offset) =>
+        _getOpenParenContexts(_source, _offset).some((_prefix) =>
+          /^(EXTRACT|OVER|POSITION|SUBSTRING|TRIM|WITHIN GROUP)$/.test(_prefix)
+        );
+
+      const _shouldSkipKeywordBreak = (_source, _keywordOffset, _keyword) => {
+        const _beforeKeyword = _source.slice(0, _keywordOffset);
+        const _normalizedKeyword = _keyword.toUpperCase();
+
+        if (_isInsideExpressionParentheses(_source, _keywordOffset)) {
+          return true;
+        }
+
+        if (_normalizedKeyword === "FROM" && /\b(?:DELETE|DISTINCT|IS\s+DISTINCT)\s*$/i.test(_beforeKeyword)) {
+          return true;
+        }
+
+        if (_normalizedKeyword === "UPDATE" && /\bDO\s*$/i.test(_beforeKeyword)) {
+          return true;
+        }
+
+        return false;
       };
 
       const _hasOpenCaseBeforeOffset = (_source, _offset) => {
@@ -2089,12 +2350,53 @@ WITH
 
       const _getNextParenDepth = (_line, _parenDepth) => {
         const _effectiveDepth = _getEffectiveParenDepth(_line, _parenDepth);
+        const _leadingCloseCount = _line.trim().match(/^\)+/)?.[0].length ?? 0;
         const _openCount = (_line.match(/\(/g) ?? []).length;
-        const _closeCount = (_line.match(/\)/g) ?? []).length;
+        const _closeCount = Math.max(0, ((_line.match(/\)/g) ?? []).length) - _leadingCloseCount);
         return Math.max(0, _effectiveDepth + _openCount - _closeCount);
       };
 
-      const _isMergeWhenLine = (_line) => /^WHEN\s+(?:NOT\s+)?MATCHED\b/.test(_line);
+      const _splitSubqueryParentheses = (_sql) => {
+        let _result = "";
+        const _parenStack = [];
+
+        for (let _index = 0; _index < _sql.length; _index += 1) {
+          const _character = _sql[_index];
+
+          if (_character === "(") {
+            let _nextIndex = _index + 1;
+            while (/\s/.test(_sql[_nextIndex] ?? "")) {
+              _nextIndex += 1;
+            }
+
+            const _isSubquery = /^(?:SELECT|WITH)\b/.test(_sql.slice(_nextIndex));
+            _parenStack.push(_isSubquery);
+            _result += _character;
+
+            if (_isSubquery) {
+              _result += "\n";
+              _index = _nextIndex - 1;
+            }
+            continue;
+          }
+
+          if (_character === ")") {
+            const _isSubquery = _parenStack.pop() === true;
+            if (_isSubquery && !_result.endsWith("\n")) {
+              _result += "\n";
+            }
+            _result += _character;
+            continue;
+          }
+
+          _result += _character;
+        }
+
+        return _result;
+      };
+
+      const _isMergeStartLine = (_line) => /^MERGE(?:\s+INTO)?\b/.test(_line);
+      const _isMergeWhenLine = (_line) => /^WHEN\s+(?:NOT\s+)?MATCHED(?:\s+BY\s+(?:SOURCE|TARGET))?\b/.test(_line);
 
       const _formatMergeWhenLine = (_line) => {
         const _match = _line.match(/^(WHEN\s+(?:NOT\s+)?MATCHED(?:\s+BY\s+(?:SOURCE|TARGET))?(?:\s+AND\s+.+?)?)\s+THEN(?:\s+(.+))?$/);
@@ -2262,12 +2564,13 @@ WITH
             _parenDepth = _getNextParenDepth(_line, _parenDepth);
           };
 
-          if (_isTopLevel && /^MERGE INTO\b/.test(_line)) {
+          if (_isTopLevel && _isMergeStartLine(_line)) {
             _context = "MERGE";
             _isInsideMergeStatement = true;
             _mergeSection = "INTO";
-            _formattedLines.push("MERGE INTO");
-            const _remainder = _stripClausePrefix(_line, "MERGE INTO");
+            const _mergeKeyword = /^MERGE\s+INTO\b/.test(_line) ? "MERGE INTO" : "MERGE";
+            _formattedLines.push(_mergeKeyword);
+            const _remainder = _stripClausePrefix(_line, _mergeKeyword);
             if (_remainder) {
               _formattedLines.push(`  ${_remainder}`);
             }
@@ -2275,11 +2578,24 @@ WITH
             continue;
           }
 
-          if (_isInsideMergeStatement && _isTopLevel && /^USING\b/.test(_line)) {
-            _context = "MERGE_USING";
-            _mergeSection = "USING";
+          if (_isTopLevel && /^USING\b/.test(_line)) {
+            _context = _isInsideMergeStatement ? "MERGE_USING" : "USING";
+            if (_isInsideMergeStatement) {
+              _mergeSection = "USING";
+            }
             _formattedLines.push("USING");
             const _remainder = _stripClausePrefix(_line, "USING");
+            if (_remainder) {
+              _formattedLines.push(`  ${_remainder}`);
+            }
+            _finishLine();
+            continue;
+          }
+
+          if (/^DELETE FROM\b/.test(_line)) {
+            _context = "DELETE FROM";
+            _formattedLines.push("DELETE FROM");
+            const _remainder = _stripClausePrefix(_line, "DELETE FROM");
             if (_remainder) {
               _formattedLines.push(`  ${_remainder}`);
             }
@@ -2310,7 +2626,7 @@ WITH
             continue;
           }
 
-          if (/^(INSERT INTO|UPDATE|DELETE FROM|UNION ALL|UNION)\b/.test(_line)) {
+          if (/^(INSERT INTO|UPDATE|UNION ALL|UNION)\b/.test(_line)) {
             _context = "";
             _formattedLines.push(_line);
             _finishLine();
@@ -2349,6 +2665,17 @@ WITH
           }
 
           if (/^ON\b/.test(_line)) {
+            if (/^ON CONFLICT\b/.test(_line)) {
+              _context = "ON CONFLICT";
+              _formattedLines.push("ON CONFLICT");
+              const _remainder = _stripClausePrefix(_line, "ON CONFLICT");
+              if (_remainder) {
+                _formattedLines.push(`  ${_remainder}`);
+              }
+              _finishLine();
+              continue;
+            }
+
             if (_isInsideMergeStatement && _isTopLevel && _mergeSection === "USING") {
               _context = "MERGE_ON";
               _mergeSection = "ON";
@@ -2442,6 +2769,14 @@ WITH
             continue;
           }
 
+          if (/^RETURNING\b/.test(_line)) {
+            _context = "RETURNING";
+            _formattedLines.push("RETURNING");
+            _formattedLines.push(..._formatCommaSeparatedRemainder(_stripClausePrefix(_line, "RETURNING")));
+            _finishLine();
+            continue;
+          }
+
           if (/^VALUES\b/.test(_line)) {
             if (_isInsideMergeStatement && _isTopLevel && /^(WHEN|ACTION|VALUES)$/.test(_mergeSection)) {
               _context = "MERGE_VALUES";
@@ -2472,6 +2807,12 @@ WITH
             continue;
           }
 
+          if (/^\),/.test(_line)) {
+            _formattedLines.push(_line);
+            _finishLine();
+            continue;
+          }
+
           if (/^(AND|OR)\b/.test(_line)) {
             const _indent = _context === "ON" || _context === "MERGE_WHERE" ? "    " : "  ";
             _formattedLines.push(`${_indent}${_line}`);
@@ -2495,7 +2836,7 @@ WITH
 
       const _applyParenthesisIndent = (_lines) => {
         const _result = [];
-        let _parenDepth = 0;
+        const _parenIndentStack = [];
 
         for (const _line of _lines) {
           const _trimmed = _line.trim();
@@ -2505,14 +2846,28 @@ WITH
 
           const _baseIndentSize = _line.match(/^\s*/)?.[0].length ?? 0;
           const _leadingCloseCount = _trimmed.match(/^\)+/)?.[0].length ?? 0;
-          const _effectiveDepth = Math.max(0, _parenDepth - _leadingCloseCount);
-          const _minimumParenIndent = _effectiveDepth > 0 ? (_effectiveDepth * 2) + 2 : 0;
-          const _indentSize = Math.max(_baseIndentSize, _minimumParenIndent);
+          let _closingIndentSize = null;
+          for (let _index = 0; _index < _leadingCloseCount; _index += 1) {
+            const _poppedIndentSize = _parenIndentStack.pop();
+            if (typeof _poppedIndentSize === "number") {
+              _closingIndentSize = _poppedIndentSize;
+            }
+          }
+
+          const _parenIndentSize = _parenIndentStack.length > 0
+            ? _parenIndentStack[_parenIndentStack.length - 1] + 2
+            : 0;
+          const _indentSize = _closingIndentSize ?? (_baseIndentSize + _parenIndentSize);
           _result.push(`${" ".repeat(_indentSize)}${_trimmed}`);
 
           const _openCount = (_trimmed.match(/\(/g) ?? []).length;
-          const _closeCount = (_trimmed.match(/\)/g) ?? []).length;
-          _parenDepth = Math.max(0, _effectiveDepth + _openCount - _closeCount);
+          const _closeCount = Math.max(0, ((_trimmed.match(/\)/g) ?? []).length) - _leadingCloseCount);
+          for (let _index = 0; _index < _openCount; _index += 1) {
+            _parenIndentStack.push(_indentSize);
+          }
+          for (let _index = 0; _index < _closeCount; _index += 1) {
+            _parenIndentStack.pop();
+          }
         }
 
         return _result;
@@ -2529,35 +2884,17 @@ WITH
         _formatted = _upperCaseKeywords(_formatted);
         _formatted = _formatted.replace(/\bAS(?=[A-Za-z0-9_"`\[@])/g, "AS ");
 
-        if (/\bMERGE\s+INTO\b/.test(_formatted)) {
+        if (/\bMERGE\b/.test(_formatted)) {
           for (const _keyword of MERGE_CLAUSE_KEYWORDS) {
             _formatted = _breakBeforeMergeKeyword(_formatted, _keyword);
           }
         }
 
-        for (const _keyword of [
-          "WITH",
-          "UNION ALL",
-          "UNION",
-          "SELECT",
-          "INSERT INTO",
-          "UPDATE",
-          "DELETE FROM",
-          "FROM",
-          "WHERE",
-          "GROUP BY",
-          "HAVING",
-          "ORDER BY",
-          "LIMIT",
-          "OFFSET",
-          "VALUES",
-          "SET",
-          "INNER JOIN",
-          "LEFT JOIN",
-          "RIGHT JOIN",
-          "FULL JOIN",
-          "CROSS JOIN"
-        ]) {
+        if (/\bDELETE\s+FROM\b/.test(_formatted)) {
+          _formatted = _breakBeforeKeyword(_formatted, "USING");
+        }
+
+        for (const _keyword of CLAUSE_KEYWORDS.filter((_keyword) => _keyword !== "JOIN")) {
           _formatted = _breakBeforeKeyword(_formatted, _keyword);
         }
 
@@ -2566,6 +2903,7 @@ WITH
         _formatted = _breakBeforeKeyword(_formatted, "AND");
         _formatted = _breakBeforeKeyword(_formatted, "OR");
         _formatted = _formatted.replace(/\b(AND|OR|ON)\(/g, "$1 (");
+        _formatted = _splitSubqueryParentheses(_formatted);
 
         const _structuredLines = _formatStructuredLines(_formatted);
         const _indentedLines = _applyParenthesisIndent(_structuredLines);
@@ -2675,6 +3013,12 @@ WITH
 
         if ($target instanceof HTMLElement && $target.matches('[data-role="mode-toggle"]')) {
           _handleModeToggleInput();
+          return;
+        }
+
+        if ($target instanceof HTMLElement && $target.matches('[data-role="database-dialect"]')) {
+          _syncDatabaseLabel();
+          _render();
         }
       };
 
@@ -2712,6 +3056,7 @@ WITH
 
       const _init = () => {
         _applyColorScheme(_resolveInitialTheme());
+        _syncDatabaseLabel();
         _bindEvents();
         _render();
       };
