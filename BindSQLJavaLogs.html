@@ -1070,6 +1070,7 @@ WITH
       const SQL_PARAMETER_BLOCK_PATTERN = /^\s*sql\s*=\s*\[(?<sql>[\s\S]*?)\]\s*(?:parameters?|params?)\s*=\s*\[(?<parameters>[\s\S]*?)\]\s*$/i;
       const BIND_HEADER_PATTERN = /^(?:bind(?:\s+variables?)?|params?|parameters?)\s*:?\s*$/i;
       const SQL_PREFIX_PATTERN = /^\s*sql\s*[:=]\s*(?<sql>.+)$/i;
+      const POSTGRESQL_FORMAT_COMPOSITE_OPERATOR_PATTERN = /#>>|->>|#>|->|@\?|@@|@>|<@|\?\||\?&|&&/g;
       const HIBERNATE_BIND_PATTERNS = [
         /\bbinding parameter\s+\[(?<index>\d+)\]\s+as\s+\[(?<type>[^\]]+)\]\s*-\s*\[(?<value>[\s\S]*?)\]\s*$/i,
         /\bbinding parameter\s+\((?<index>\d+)\s*:\s*(?<type>[^)]+)\)\s*<-\s*\[(?<value>[\s\S]*?)\]\s*$/i
@@ -1176,10 +1177,13 @@ WITH
 
       const _quoteParameterValue = (_value, _forceStringLiteral = false) => {
         const _trimmed = _value.trim();
+        if (!_trimmed) {
+          return _forceStringLiteral ? "''" : _trimmed;
+        }
         if (_forceStringLiteral && _isQuotedValue(_trimmed)) {
           return _trimmed;
         }
-        if (!_trimmed || (!_forceStringLiteral && _isSqlLiteralValue(_trimmed))) {
+        if (!_forceStringLiteral && _isSqlLiteralValue(_trimmed)) {
           return _trimmed;
         }
 
@@ -1347,6 +1351,15 @@ WITH
         return `${_index} = ${_quoteParameterValue(_parameter._value, _forceStringLiteral)}`;
       };
 
+      const _appendLogSqlLine = (_sqlLines, _line) => {
+        const _trimmed = _line.trim();
+        if (_trimmed) {
+          _sqlLines.push(_trimmed);
+        }
+      };
+
+      const _isMyBatisControlLine = (_line) => /^\s*(?:==>|<==)/.test(_line);
+
       const _readDollarQuotedSegment = (_sql, _startIndex) => {
         if (_sql[_startIndex] !== "$") {
           return "";
@@ -1416,7 +1429,7 @@ WITH
 
         if (_startCharacter === "-" && _sql[_startIndex + 1] === "-") {
           const _endIndex = _sql.indexOf("\n", _startIndex);
-          return _sql.slice(_startIndex, _endIndex === -1 ? _sql.length : _endIndex);
+          return _sql.slice(_startIndex, _endIndex === -1 ? _sql.length : _endIndex + 1);
         }
 
         if (_startCharacter === "/" && _sql[_startIndex + 1] === "*") {
@@ -1498,7 +1511,7 @@ WITH
           const _endIndex = _sql.indexOf("\n", _startIndex);
           return {
             _kind: "comment",
-            _text: _sql.slice(_startIndex, _endIndex === -1 ? _sql.length : _endIndex)
+            _text: _sql.slice(_startIndex, _endIndex === -1 ? _sql.length : _endIndex + 1)
           };
         }
 
@@ -1838,6 +1851,78 @@ WITH
         return !SQL_ASSIGNMENT_NAMES.has(_namedMatch.groups.name.toUpperCase());
       };
 
+      const _isAmbiguousPositionalPredicateLine = (_trimmed) => {
+        const _match = _trimmed.match(POSITIONAL_BIND_PATTERN);
+        if (!_match?.groups?.indexB || !_match.groups.value) {
+          return false;
+        }
+
+        return _match.groups.indexB === _match.groups.value.trim();
+      };
+
+      const _getPreviousNonEmptySqlLine = (_sqlLines) => {
+        for (let _index = _sqlLines.length - 1; _index >= 0; _index -= 1) {
+          const _trimmed = _sqlLines[_index].trim();
+          if (_trimmed) {
+            return _trimmed;
+          }
+        }
+
+        return "";
+      };
+
+      const _hasImplicitBindPlaceholders = (_sqlLines) => {
+        const _sqlText = _sqlLines.join("\n");
+        if (!_sqlText.trim()) {
+          return false;
+        }
+
+        const _maskedSql = _maskSqlProtectedSegments(_sqlText)._masked;
+        if (_countNamedPlaceholders(_maskedSql).size > 0) {
+          return true;
+        }
+
+        for (let _index = 0; _index < _maskedSql.length; _index += 1) {
+          if (_maskedSql[_index] === "?" && !_isPostgresqlQuestionMarkOperator(_maskedSql, _index)) {
+            return true;
+          }
+        }
+
+        return false;
+      };
+
+      const _isRemainingBindDefinitionBlock = (_lines, _startIndex, _allowBareName = false) => {
+        for (let _index = _startIndex; _index < _lines.length; _index += 1) {
+          const _trimmed = _lines[_index].trim();
+          if (!_trimmed) {
+            continue;
+          }
+
+          if (!_isBindDefinitionLine(_trimmed, _allowBareName)) {
+            return false;
+          }
+        }
+
+        return true;
+      };
+
+      const _shouldTreatAsBindDefinitionLine = (_trimmed, _lines, _lineIndex, _sqlLines, _bindSectionStarted) => {
+        if (!_isBindDefinitionLine(_trimmed, _bindSectionStarted)) {
+          return false;
+        }
+
+        if (_bindSectionStarted) {
+          return true;
+        }
+
+        const _previousSqlLine = _getPreviousNonEmptySqlLine(_sqlLines);
+        if (_isAmbiguousPositionalPredicateLine(_trimmed) && /^(?:WHERE|AND|OR)$/i.test(_previousSqlLine)) {
+          return false;
+        }
+
+        return _hasImplicitBindPlaceholders(_sqlLines) && _isRemainingBindDefinitionBlock(_lines, _lineIndex);
+      };
+
       const _buildLogInputResult = (_sqlText, _bindLines) => {
         const _trimmedSql = _sqlText.trim();
         if (!_trimmedSql) {
@@ -1851,30 +1936,44 @@ WITH
       };
 
       const _parseMyBatisLogInput = (_inputText) => {
-        let _sqlText = "";
+        const _sqlLines = [];
         let _parametersText = "";
+        let _isCollectingSql = false;
 
         for (const _line of _inputText.split(/\r?\n/)) {
-          const _preparingMatch = _line.match(/==>\s*Preparing:\s*(?<sql>.+)$/i);
-          if (_preparingMatch?.groups?.sql) {
-            _sqlText = _preparingMatch.groups.sql;
+          const _preparingMatch = _line.match(/==>\s*Preparing:\s*(?<sql>.*)$/i);
+          if (_preparingMatch?.groups) {
+            _sqlLines.length = 0;
+            _appendLogSqlLine(_sqlLines, _preparingMatch.groups.sql);
+            _isCollectingSql = true;
             continue;
           }
 
           const _parametersMatch = _line.match(/==>\s*Parameters:\s*(?<parameters>.*)$/i);
           if (_parametersMatch?.groups) {
             _parametersText = _parametersMatch.groups.parameters;
+            _isCollectingSql = false;
+            continue;
+          }
+
+          if (_isCollectingSql) {
+            if (_isMyBatisControlLine(_line)) {
+              _isCollectingSql = false;
+              continue;
+            }
+
+            _appendLogSqlLine(_sqlLines, _line);
           }
         }
 
-        if (!_sqlText) {
+        if (_sqlLines.length === 0) {
           return null;
         }
 
         const _bindLines = _splitLogParameterEntries(_parametersText)
           .map((_entry, _index) => _formatLogPositionalBindLine(_index + 1, _entry, true));
 
-        return _buildLogInputResult(_sqlText, _bindLines);
+        return _buildLogInputResult(_sqlLines.join("\n"), _bindLines);
       };
 
       const _parseHibernateSqlLine = (_line) => {
@@ -1899,32 +1998,72 @@ WITH
       };
 
       const _parseHibernateLogInput = (_inputText) => {
-        let _sqlText = "";
+        const _sqlLines = [];
         const _bindLines = [];
+        let _isCollectingSql = false;
 
         for (const _line of _inputText.split(/\r?\n/)) {
+          const _showSqlStartMatch = _line.match(/\bHibernate:\s*(?<sql>.*)$/i);
+          if (_showSqlStartMatch?.groups) {
+            _sqlLines.length = 0;
+            _appendLogSqlLine(_sqlLines, _showSqlStartMatch.groups.sql);
+            _isCollectingSql = true;
+            continue;
+          }
+
           const _lineSqlText = _parseHibernateSqlLine(_line);
           if (_lineSqlText) {
-            _sqlText = _lineSqlText;
+            _sqlLines.length = 0;
+            _appendLogSqlLine(_sqlLines, _lineSqlText);
+            _isCollectingSql = true;
             continue;
           }
 
           const _bindLine = _parseHibernateBindLine(_line);
           if (_bindLine) {
+            _isCollectingSql = false;
             _bindLines.push(_bindLine);
+            continue;
+          }
+
+          if (_isCollectingSql) {
+            _appendLogSqlLine(_sqlLines, _line);
           }
         }
 
-        if (!_sqlText) {
+        if (_sqlLines.length === 0) {
           return null;
         }
 
-        return _buildLogInputResult(_sqlText, _bindLines);
+        return _buildLogInputResult(_sqlLines.join("\n"), _bindLines);
+      };
+
+      const _extractSpringJdbcPreparedSql = (_inputText) => {
+        const _startMatch = /\bExecuting prepared SQL statement\s*\[/i.exec(_inputText);
+        if (!_startMatch) {
+          return "";
+        }
+
+        const _sqlStartIndex = _startMatch.index + _startMatch[0].length;
+        const _lineEndIndex = _inputText.indexOf("\n", _sqlStartIndex);
+        const _sameLineEndIndex = _lineEndIndex === -1 ? _inputText.length : _lineEndIndex;
+        const _sameLineCloseIndex = _inputText.lastIndexOf("]", _sameLineEndIndex);
+        if (_sameLineCloseIndex >= _sqlStartIndex) {
+          return _inputText.slice(_sqlStartIndex, _sameLineCloseIndex);
+        }
+
+        const _tail = _inputText.slice(_sqlStartIndex);
+        const _nextParameterLineIndex = _tail.search(/\r?\n[^\n]*\bcolumn index\s+\d+\s*,\s*parameter value\b/i);
+        const _searchEndIndex = _nextParameterLineIndex === -1
+          ? _inputText.length
+          : _sqlStartIndex + _nextParameterLineIndex;
+        const _closeIndex = _inputText.lastIndexOf("]", _searchEndIndex);
+        return _closeIndex >= _sqlStartIndex ? _inputText.slice(_sqlStartIndex, _closeIndex) : "";
       };
 
       const _parseSpringJdbcLogInput = (_inputText) => {
-        const _sqlMatch = _inputText.match(/\bExecuting prepared SQL statement\s*\[(?<sql>[\s\S]*?)\]/i);
-        if (!_sqlMatch?.groups?.sql) {
+        const _sqlText = _extractSpringJdbcPreparedSql(_inputText);
+        if (!_sqlText) {
           return null;
         }
 
@@ -1936,7 +2075,7 @@ WITH
           }
         }
 
-        return _buildLogInputResult(_sqlMatch.groups.sql, _bindLines);
+        return _buildLogInputResult(_sqlText, _bindLines);
       };
 
       const _parseSupportedLogInput = (_inputText) =>
@@ -1963,7 +2102,8 @@ WITH
         let _bindSectionStarted = false;
 
         const _lines = _inputText.split(/\r?\n/);
-        for (const _line of _lines) {
+        for (let _lineIndex = 0; _lineIndex < _lines.length; _lineIndex += 1) {
+          const _line = _lines[_lineIndex];
           const _trimmed = _line.trim();
           if (!_trimmed) {
             if (!_bindSectionStarted) {
@@ -1983,7 +2123,7 @@ WITH
             continue;
           }
 
-          if (_isBindDefinitionLine(_trimmed, _bindSectionStarted)) {
+          if (_shouldTreatAsBindDefinitionLine(_trimmed, _lines, _lineIndex, _sqlLines, _bindSectionStarted)) {
             _bindLines.push(_trimmed);
             _bindSectionStarted = true;
             continue;
@@ -2057,22 +2197,35 @@ WITH
 
       const POSTGRESQL_QUESTION_OPERATOR_PREVIOUS_KEYWORDS = new Set([
         "AND",
+        "BETWEEN",
         "BY",
         "CASE",
         "ELSE",
+        "ESCAPE",
         "FROM",
+        "FETCH",
+        "FIRST",
         "HAVING",
+        "ILIKE",
         "IN",
         "IS",
         "JOIN",
+        "LIKE",
+        "LIMIT",
+        "NEXT",
         "NOT",
         "NULL",
+        "OFFSET",
         "ON",
         "OR",
+        "ROW",
+        "ROWS",
         "RETURNING",
         "SELECT",
         "SET",
+        "SIMILAR",
         "THEN",
+        "TO",
         "TRUE",
         "FALSE",
         "USING",
@@ -2234,8 +2387,26 @@ WITH
         });
       };
 
-      const _addSpaceAroundOperators = (_sql) =>
-        _sql
+      const _maskPostgresqlCompositeOperators = (_sql) => {
+        const _operators = [];
+        const _masked = _sql.replace(POSTGRESQL_FORMAT_COMPOSITE_OPERATOR_PATTERN, (_operator) => {
+          const _token = `@@BindSQL_OPERATOR_${_operators.length}@@`;
+          _operators.push(_operator);
+          return _token;
+        });
+
+        return { _masked, _operators };
+      };
+
+      const _restorePostgresqlCompositeOperators = (_sql, _operators) =>
+        _sql.replace(/@@BindSQL_OPERATOR_(\d+)@@/g, (_all, _indexText) => {
+          const _index = Number(_indexText);
+          return _operators[_index] ?? "";
+        });
+
+      const _addSpaceAroundOperators = (_sql) => {
+        const _operatorStore = _maskPostgresqlCompositeOperators(_sql);
+        const _spacedSql = _operatorStore._masked
           .replace(/\s*\.\s*/g, ".")
           .replace(/\s*(<>|!=|<=|>=|=|<|>)\s*/g, " $1 ")
           .replace(/\s*(\+|\/)\s*/g, " $1 ")
@@ -2244,6 +2415,9 @@ WITH
           .replace(/\s*,\s*/g, ", ")
           .replace(/\s+/g, " ")
           .trim();
+
+        return _restorePostgresqlCompositeOperators(_spacedSql, _operatorStore._operators);
+      };
 
       const _breakBeforeKeyword = (_sql, _keyword, _indent = "") => {
         const _pattern = new RegExp(`\\s+${_keyword.replace(/\s+/g, "\\s+")}\\b`, "g");
