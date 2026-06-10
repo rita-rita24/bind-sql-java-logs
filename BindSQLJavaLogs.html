@@ -124,6 +124,8 @@
 
         @media (max-width: 980px) {
           grid-template-columns: 1fr;
+          grid-template-rows: minmax(18rem, 45vh) minmax(18rem, 45vh);
+          overflow: auto;
         }
       }
 
@@ -283,6 +285,7 @@
         color: var(--text);
         white-space: pre-wrap;
         word-break: break-word;
+        overflow: auto;
       }
 
       .sql-token {
@@ -1196,6 +1199,8 @@ WITH
         let _quoteClose = "";
         let _quoteAllowsEscape = false;
         let _isEscaped = false;
+        let _parenDepth = 0;
+        let _bracketDepth = 0;
 
         for (const _character of _parametersText) {
           if (_quoteClose) {
@@ -1221,7 +1226,31 @@ WITH
             continue;
           }
 
-          if (_character === ",") {
+          if (_character === "(") {
+            _parenDepth += 1;
+            _current += _character;
+            continue;
+          }
+
+          if (_character === ")") {
+            _parenDepth = Math.max(0, _parenDepth - 1);
+            _current += _character;
+            continue;
+          }
+
+          if (_character === "[") {
+            _bracketDepth += 1;
+            _current += _character;
+            continue;
+          }
+
+          if (_character === "]") {
+            _bracketDepth = Math.max(0, _bracketDepth - 1);
+            _current += _character;
+            continue;
+          }
+
+          if (_character === "," && _parenDepth === 0 && _bracketDepth === 0) {
             const _entry = _current.trim();
             if (_entry) {
               _entries.push(_entry);
@@ -1829,7 +1858,7 @@ WITH
         return _toPostgresqlStringLiteral(_value);
       };
 
-      const _isBindDefinitionLine = (_trimmed, _allowBareName = false) => {
+      const _isBindDefinitionLine = (_trimmed, _allowBareName = false, _allowSqlAssignmentName = false) => {
         const _positionalMatch = _trimmed.match(POSITIONAL_BIND_PATTERN);
         if (_positionalMatch?.groups?.value) {
           return true;
@@ -1846,6 +1875,10 @@ WITH
 
         if (!_allowBareName) {
           return false;
+        }
+
+        if (_allowSqlAssignmentName) {
+          return true;
         }
 
         return !SQL_ASSIGNMENT_NAMES.has(_namedMatch.groups.name.toUpperCase());
@@ -1891,14 +1924,14 @@ WITH
         return false;
       };
 
-      const _isRemainingBindDefinitionBlock = (_lines, _startIndex, _allowBareName = false) => {
+      const _isRemainingBindDefinitionBlock = (_lines, _startIndex, _allowBareName = false, _allowSqlAssignmentName = false) => {
         for (let _index = _startIndex; _index < _lines.length; _index += 1) {
           const _trimmed = _lines[_index].trim();
           if (!_trimmed) {
             continue;
           }
 
-          if (!_isBindDefinitionLine(_trimmed, _allowBareName)) {
+          if (!_isBindDefinitionLine(_trimmed, _allowBareName, _allowSqlAssignmentName)) {
             return false;
           }
         }
@@ -1907,7 +1940,7 @@ WITH
       };
 
       const _shouldTreatAsBindDefinitionLine = (_trimmed, _lines, _lineIndex, _sqlLines, _bindSectionStarted) => {
-        if (!_isBindDefinitionLine(_trimmed, _bindSectionStarted)) {
+        if (!_isBindDefinitionLine(_trimmed, _bindSectionStarted, _bindSectionStarted)) {
           return false;
         }
 
@@ -2061,6 +2094,34 @@ WITH
         return _closeIndex >= _sqlStartIndex ? _inputText.slice(_sqlStartIndex, _closeIndex) : "";
       };
 
+      const _parseSpringJdbcParameterLine = (_line) => {
+        const _prefixMatch = /\bcolumn index\s+(?<index>\d+)\s*,\s*parameter value\s+\[/i.exec(_line);
+        if (!_prefixMatch?.groups?.index) {
+          return null;
+        }
+
+        const _tail = _line.slice(_prefixMatch.index + _prefixMatch[0].length);
+        const _typedMatch = _tail.match(/^(?<value>[\s\S]*)\]\s*,\s*value class\s+\[(?<type>[^\]]*)\](?:\s*,[\s\S]*)?$/i);
+        if (_typedMatch?.groups) {
+          return {
+            _index: Number(_prefixMatch.groups.index),
+            _value: _typedMatch.groups.value,
+            _type: _typedMatch.groups.type
+          };
+        }
+
+        const _valueMatch = _tail.match(/^(?<value>[\s\S]*)\](?:\s*,\s*SQL\s+type\b[\s\S]*)?$/i);
+        if (!_valueMatch?.groups) {
+          return null;
+        }
+
+        return {
+          _index: Number(_prefixMatch.groups.index),
+          _value: _valueMatch.groups.value,
+          _type: ""
+        };
+      };
+
       const _parseSpringJdbcLogInput = (_inputText) => {
         const _sqlText = _extractSpringJdbcPreparedSql(_inputText);
         if (!_sqlText) {
@@ -2069,9 +2130,9 @@ WITH
 
         const _bindLines = [];
         for (const _line of _inputText.split(/\r?\n/)) {
-          const _parameterMatch = _line.match(/\bcolumn index\s+(?<index>\d+)\s*,\s*parameter value\s+\[(?<value>[\s\S]*?)\]/i);
-          if (_parameterMatch?.groups?.index && _parameterMatch.groups.value !== undefined) {
-            _bindLines.push(_formatLogPositionalBindLine(Number(_parameterMatch.groups.index), _parameterMatch.groups.value));
+          const _parameter = _parseSpringJdbcParameterLine(_line);
+          if (_parameter) {
+            _bindLines.push(_formatLogPositionalBindLine(_parameter._index, _parameter._value, false, _parameter._type));
           }
         }
 
@@ -2117,13 +2178,19 @@ WITH
             continue;
           }
 
+          const _treatAsBindDefinition = _shouldTreatAsBindDefinitionLine(_trimmed, _lines, _lineIndex, _sqlLines, _bindSectionStarted);
+          if (_bindSectionStarted && _treatAsBindDefinition) {
+            _bindLines.push(_trimmed);
+            continue;
+          }
+
           const _sqlPrefixMatch = _line.match(SQL_PREFIX_PATTERN);
           if (_sqlPrefixMatch?.groups?.sql) {
             _sqlLines.push(_sqlPrefixMatch.groups.sql.trim());
             continue;
           }
 
-          if (_shouldTreatAsBindDefinitionLine(_trimmed, _lines, _lineIndex, _sqlLines, _bindSectionStarted)) {
+          if (_treatAsBindDefinition) {
             _bindLines.push(_trimmed);
             _bindSectionStarted = true;
             continue;
