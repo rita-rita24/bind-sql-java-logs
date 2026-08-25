@@ -1203,6 +1203,9 @@ WITH
       const _escapeRegExp = (_value) => _value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const _escapeHtml = (_value) => _value.replace(/[&<>"']/g, (_character) => HTML_ESCAPE_MAP[_character] ?? _character);
       const _isWordCharacter = (_character) => /[A-Za-z0-9_$]/.test(_character);
+      const _isPostgresqlEscapeStringQuote = (_sql, _quoteIndex) =>
+        (_sql[_quoteIndex - 1] ?? "").toLowerCase() === "e" &&
+        !_isWordCharacter(_sql[_quoteIndex - 2] ?? "");
 
       const _isQuotedValue = (_value) =>
         (_value.startsWith("'") && _value.endsWith("'")) ||
@@ -1464,6 +1467,7 @@ WITH
         }
 
         if (_startCharacter === "'") {
+          const _allowBackslashEscape = _isPostgresqlEscapeStringQuote(_sql, _startIndex);
           let _index = _startIndex + 1;
           while (_index < _sql.length) {
             const _character = _sql[_index];
@@ -1471,7 +1475,7 @@ WITH
               _index += 2;
               continue;
             }
-            if (_character === "\\") {
+            if (_allowBackslashEscape && _character === "\\") {
               _index += 2;
               continue;
             }
@@ -1489,10 +1493,6 @@ WITH
           while (_index < _sql.length) {
             const _character = _sql[_index];
             if (_character === '"' && _sql[_index + 1] === '"') {
-              _index += 2;
-              continue;
-            }
-            if (_character === "\\") {
               _index += 2;
               continue;
             }
@@ -1570,7 +1570,7 @@ WITH
             continue;
           }
 
-          if (_character === _closeQuote && _allowEscapes && _sql[_index + 1] === _closeQuote) {
+          if (_character === _closeQuote && _sql[_index + 1] === _closeQuote) {
             _index += 2;
             continue;
           }
@@ -1621,7 +1621,7 @@ WITH
               _sql,
               _startIndex,
               _closeQuote,
-              _startCharacter === "'" || _startCharacter === '"'
+              _startCharacter === "'" && _isPostgresqlEscapeStringQuote(_sql, _startIndex)
             )
           };
         }
