@@ -218,21 +218,29 @@
         position: relative;
         min-height: 0;
         height: 100%;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--surface);
+        overflow: hidden;
+
+        &:focus-within {
+          outline: 2px solid var(--focus-ring);
+          outline-offset: 1px;
+        }
       }
 
       .input-editor__highlight {
         position: absolute;
         inset: 0;
-        border: 1px solid var(--border);
-        border-radius: 10px;
         padding: 0.75rem 0.85rem;
-        background: var(--surface);
+        background: transparent;
         color: var(--text);
         font-family: "Monaco", "Menlo", "Consolas", monospace;
         font-size: 0.9rem;
         line-height: 1.55;
-        white-space: pre-wrap;
-        word-break: break-word;
+        white-space: pre;
+        word-break: normal;
+        overflow-wrap: normal;
         overflow: auto;
         pointer-events: none;
         scrollbar-width: none;
@@ -247,10 +255,10 @@
         width: 100%;
         min-height: 0;
         height: 100%;
-        resize: vertical;
+        resize: none;
         field-sizing: fixed;
-        border: 1px solid transparent;
-        border-radius: 10px;
+        border: 0;
+        border-radius: 0;
         padding: 0.75rem 0.85rem;
         background: transparent;
         color: transparent;
@@ -259,8 +267,40 @@
         font-family: "Monaco", "Menlo", "Consolas", monospace;
         font-size: 0.9rem;
         line-height: 1.55;
+        white-space: pre;
+        word-break: normal;
+        overflow-wrap: normal;
+        overflow: auto;
         position: relative;
         z-index: 1;
+
+        &:focus-visible {
+          outline: none;
+        }
+
+        &::selection {
+          background: oklch(from var(--primary) l c h / 28%);
+        }
+      }
+
+      .output {
+        display: block;
+        width: 100%;
+        min-height: 0;
+        height: 100%;
+        resize: none;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 0.9rem;
+        background: var(--surface);
+        font-family: "Monaco", "Menlo", "Consolas", monospace;
+        font-size: 0.9rem;
+        line-height: 1.6;
+        color: var(--text);
+        white-space: pre;
+        word-break: normal;
+        overflow-wrap: normal;
+        overflow: auto;
 
         &:focus-visible {
           outline: 2px solid var(--focus-ring);
@@ -270,22 +310,6 @@
         &::selection {
           background: oklch(from var(--primary) l c h / 28%);
         }
-      }
-
-      .output {
-        min-height: 0;
-        height: 100%;
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        padding: 0.9rem;
-        background: var(--surface);
-        font-family: "Monaco", "Menlo", "Consolas", monospace;
-        font-size: 0.9rem;
-        line-height: 1.6;
-        color: var(--text);
-        white-space: pre-wrap;
-        word-break: break-word;
-        overflow: auto;
       }
 
       .sql-token {
@@ -657,6 +681,7 @@
               id="raw-input"
               class="textarea"
               data-role="raw-input"
+              wrap="off"
               spellcheck="false"
             ></textarea>
           </div>
@@ -687,8 +712,15 @@
 
       <div class="panel__body">
         <div class="field">
-          <p class="form-label">出力欄</p>
-          <pre class="output" data-role="output">-- ここにPostgreSQL向けSQLが表示されます --</pre>
+          <label class="form-label" for="sql-output">出力欄</label>
+          <textarea
+            id="sql-output"
+            class="output"
+            data-role="output"
+            readonly
+            wrap="off"
+            spellcheck="false"
+          ></textarea>
         </div>
       </div>
     </section>
@@ -1771,13 +1803,8 @@ WITH
         }
       };
 
-      const _renderOutputHighlight = (_sql) => {
-        if (!_sql) {
-          $output.textContent = _buildPlaceholderText();
-          return;
-        }
-
-        $output.innerHTML = _buildHighlightedSqlHtml(_sql);
+      const _renderOutputText = (_sql) => {
+        $output.value = _sql || _buildPlaceholderText();
       };
 
       const _isSupportedTheme = (_theme) => _theme === THEME_LIGHT || _theme === THEME_DARK;
@@ -3306,13 +3333,13 @@ WITH
 
         if (_merged._issues.length > 0) {
           _state._lastSql = "";
-          $output.textContent = _buildMergeIssueOutput(_merged._issues, _formatted);
+          $output.value = _buildMergeIssueOutput(_merged._issues, _formatted);
           _showFlash(MESSAGES.mergeError(_merged._issues.join(" ")), "error", `merge:${_merged._issues.join("|")}`);
           return;
         }
 
         _state._lastSql = _formatted;
-        _renderOutputHighlight(_formatted);
+        _renderOutputText(_formatted);
       };
 
       const _handleInputEvent = (event) => {

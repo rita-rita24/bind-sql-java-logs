@@ -112,33 +112,33 @@
 
 ## 11. PostgreSQL配列添字内のプレースホルダが置換されない
 
-- ステータス: 未
+- ステータス: 完
 - 種別: 新規
 - 重要度: 高
 - 問題: PostgreSQLの配列添字などで `arr[?]` や `data[:idx]` のように角括弧内へプレースホルダを書くと、バインド定義が検出されず、プレースホルダも置換されない。
-- 根拠: `BindSQLJavaLogs.html:1474` から `BindSQLJavaLogs.html:1476` で角括弧全体を保護セグメントとして扱っている。さらに `BindSQLJavaLogs.html:1907` から `BindSQLJavaLogs.html:1924` の暗黙バインド検出と、`BindSQLJavaLogs.html:2372` から `BindSQLJavaLogs.html:2391` の置換処理はいずれも保護後のSQLを対象にする。実行確認では `select arr[?] from t\n1 = 2` が `_bindLines: []` になり、出力も `arr[?]` と `t 1 = 2` を含んだ。
-- 現状: 角括弧内の位置バインド・名前付きバインドは、暗黙バインド検出と置換の対象外になっている。
-- 影響: 配列添字をバインドするSQLで、未置換SQLやバインド行混入SQLが生成され、PostgreSQLで実行できない可能性が高い。
-- 次の対応: 角括弧保護を引用識別子用途に限定する、または角括弧内の `?` / `:name` を検出・置換対象にする。
+- 根拠: `BindSQLJavaLogs.html:1475` から `BindSQLJavaLogs.html:1478` で、直前がSQL式の一部である角括弧は保護しないようにしている。これにより `BindSQLJavaLogs.html:1912` から `BindSQLJavaLogs.html:1930` の暗黙バインド検出と置換処理の対象に入る。ブラウザ確認では `select arr[?] from t\n1 = 2` が `arr[2]`、`select data[:idx] from t\nidx = 3` が `data[3]` になり、`[from]` のような引用識別子は保護されたままだった。
+- 現状: PostgreSQL配列添字内の位置バインド・名前付きバインドは置換対象になっている。
+- 影響: 現在のコードでは、この課題による添字内プレースホルダの未置換やバインド行混入は確認されない。
+- 次の対応: なし。
 
 ## 12. ヘッダーなしの名前付きバインド行がSQL本文に混入する
 
-- ステータス: 未
+- ステータス: 完
 - 種別: 新規
 - 重要度: 中
 - 問題: `:id` を含むSQLの直後に `id = 1` のようなbare nameのバインド行を置くと、`params:` ヘッダーや `:id = 1` のコロン付き表記がない限りバインド定義として扱われず、SQL本文に混入する。
-- 根拠: `BindSQLJavaLogs.html:1861` から `BindSQLJavaLogs.html:1878` でbare nameのバインド定義は `_allowBareName` が真のときだけ許可されるが、`BindSQLJavaLogs.html:1942` から `BindSQLJavaLogs.html:1956` ではバインドセクション開始前に `_allowBareName` が真にならない。実行確認では `select * from t where id=:id\nid=1` が `_bindLines: []` になり、`:id` 未置換と `id = 1` のSQL本文混入が発生した。
-- 現状: ヘッダーなしの名前付きバインドは、先頭に `:` を付けた場合か、明示的な `params:` セクション内だけ正常に処理される。
-- 影響: READMEで名前付きバインド対応をうたっている一方、自然な貼り付け形式で未置換や無効SQLが発生し、ユーザー操作で想定外の出力になる。
-- 次の対応: 未解決の名前付きプレースホルダがあり、残り行がバインド定義だけの場合は、SQL代入行や述語誤判定を避けつつbare nameもバインド行として扱う。
+- 根拠: `BindSQLJavaLogs.html:1932` から `BindSQLJavaLogs.html:1957` でSQL本文中の名前付きプレースホルダを数え、同名のbare name行を暗黙バインド定義として扱えるようにした。さらに `BindSQLJavaLogs.html:1959` から `BindSQLJavaLogs.html:1996` で残り行が暗黙バインド定義だけの場合に限ってバインドセクションへ移行している。ブラウザ確認では `select * from t where id=:id\nid=1` が `id = 1` に置換され、`:id` や `id=1` 行は出力に残らなかった。
+- 現状: 未解決の名前付きプレースホルダと同名のヘッダーなしbare name行は、バインド定義として処理される。
+- 影響: 現在のコードでは、この課題による自然な貼り付け形式での未置換やSQL本文混入は確認されない。
+- 次の対応: なし。
 
 ## 13. 指数表記の数値バインドが文字列リテラル化される
 
-- ステータス: 未
+- ステータス: 完
 - 種別: 新規
 - 重要度: 中
 - 問題: `1e-3` や `1E+6` のような指数表記の数値バインドが数値リテラルとして認識されず、`'1e-3'` や `'1E+6'` の文字列リテラルとして出力される。
-- 根拠: `BindSQLJavaLogs.html:1173` から `BindSQLJavaLogs.html:1177` と `BindSQLJavaLogs.html:1854` の数値判定正規表現が指数部を許容していない。`BindSQLJavaLogs.html:1375` から `BindSQLJavaLogs.html:1380` のログパラメータ整形も同じ判定に依存する。実行確認では手入力の `1 = 1e-3`、MyBatisの `1E+6(BigDecimal)`、Hibernateの `[NUMERIC] - [1E+6]` がいずれも引用付きで出力された。
-- 現状: 整数・小数は数値として扱われるが、指数表記の数値は文字列として扱われる。
-- 影響: 数値列や数値関数に対して型不一致、暗黙キャスト依存、実行計画や比較結果の差異につながる可能性がある。
-- 次の対応: 数値リテラル判定に指数表記を追加し、手入力・MyBatis・Hibernate・Spring JDBCの数値ログで引用されないことを確認する。
+- 根拠: `BindSQLJavaLogs.html:1076` で指数部を含む数値リテラル判定を共通化し、`BindSQLJavaLogs.html:1174` から `BindSQLJavaLogs.html:1178`、`BindSQLJavaLogs.html:1301` から `BindSQLJavaLogs.html:1308`、`BindSQLJavaLogs.html:1851` から `BindSQLJavaLogs.html:1863` で利用している。また `BindSQLJavaLogs.html:2514` から `BindSQLJavaLogs.html:2532` で `1E+6` の `+` が整形時に分断されないようにしている。ブラウザ確認では手入力の `1 = 1e-3`、MyBatisの `1E+6(BigDecimal)`、Hibernateの `[NUMERIC] - [1E+6]`、Spring JDBCの `java.math.BigDecimal` 値が引用なしで出力され、`java.lang.String` 値は引き続き文字列として引用された。
+- 現状: 指数表記の数値は数値リテラルとして扱われ、整形後も `1E+6` の形を維持する。
+- 影響: 現在のコードでは、この課題による指数表記数値の文字列化や指数部の分断は確認されない。
+- 次の対応: なし。
